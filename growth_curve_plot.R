@@ -2,73 +2,62 @@ library(tidyverse)
 library(ggplot2)
 library(RColorBrewer)
 
-setwd("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/Projects/Proteus Ybt/Growth Assays")
+##### Input Files #####
 
-growth_assay <- read.csv("20260108_Growth_Chelators_formatR.csv")
+# growth_assay: growth assay results output from instrument
+#           Column 1: Time (numerical value)
+#           Columns 2-end: assay values with well ID as column name
+# well_IDs: (.csv) table annotated with:
+#           Column 1: well IDs as "A1", "A2"....
+#           Column 2: Condition (ie. bacteria strain)
+#           Column 3: Treatment (ie. media additive)
+
+setwd("C:/Users/Olivia.Schwartz/OneDrive - University of Denver/Projects/Proteus Ybt/Growth Assays")
+directory <- getwd()
+
+growth_assay <- read.csv("20260114_Growth_DMG_formatR.csv")
+well_IDs <- read.csv("20260114_Growth_DMG_Well_IDs.csv")
+
+##### Input Parameters #####
+plot_titles <- "DMG"
+condition_filter <- "Media" #Plot only this condition
+fill_point <- "Condition" #Column used to fill plot point color
+
+##### Functions ####
+
+#Generate a growth curve of the specific condition, separate plots for each treatment
+plot_growth_condition <- function(data, condition, title) {
+  data %>%
+    dplyr::filter(.data$Condition == condition) %>%
+    ggplot(aes(x = time, y = OD, color = Condition)) +
+    geom_point() +
+    theme(text = element_text(size = 25)) +
+    labs(title = title) +
+    scale_color_brewer(palette = "Dark2") +
+    facet_wrap(~Treatment)  
+  
+  ggsave(file=paste(directory,"/",plot_titles,"_",title,".svg",sep=""), plot=last_plot())
+}
+#####
+
+colnames(well_IDs)[1] <- "well_ID"
+colnames(well_IDs)[2] <- "Condition"
+colnames(well_IDs)[2] <- "Treatment"
 
 #pivoting to long format for plotting
-growth_assay %>%
+growth_assay <- growth_assay %>%
   pivot_longer(cols=2:ncol(growth_assay),
                names_to='well_ID',
-               values_to='OD')%>%
-  #creating new variables based on plate location
-  mutate(chelator=case_when(str_detect(well_ID,'B')==T ~ 'Blank',
-                                str_detect(well_ID,'C')==T ~ 'Control',
-                                str_detect(well_ID,'D')==T ~ 'DFOB',
-                                str_detect(well_ID,'E')==T ~ 'TPEN',
-                                str_detect(well_ID,'F')==T ~ 'BCS',
-                                str_detect(well_ID,'G')==T ~ 'DMG+Ni'),
-         chelator_conc=case_when(str_detect(well_ID,'[2-4]')==T ~ "5",
-                              str_detect(well_ID,'[5-7]')==T ~ "10",
-                              str_detect(well_ID,'8|9|10')==T ~ "20"),
-         treat_med='NM',
-         treat_date='0108',
-         treat_inoc='0.02',
-         treat_mod='chelator')-> growth_assay_long
+               values_to='OD') 
+#merge data
+growth_assay <- left_join(growth_assay, well_IDs, by ="well_ID")
 
-
-#Plotting chelated media separately
-growth_assay_chel <- growth_assay_long %>% dplyr::filter(growth_assay_long$chelator != "Blank" & growth_assay_long$chelator != "Control")
-growth_assay_chel %>%
-  ggplot(aes(x=time, y=OD, color=chelator_conc)) + geom_point(aes(fill=chelator_conc)) + facet_wrap(~chelator) + theme(text = element_text(size = 25))
-#ggsave(file=paste("Chelator_Growth_Curves.svg"), plot=last_plot())
-
-#Plotting culture controls 
-growth_assay_ctrl <- growth_assay_long %>% dplyr::filter(growth_assay_long$chelator == "Control") 
-
-growth_assay_ctrl <- growth_assay_ctrl %>%
-  mutate(
-    chelator = case_when(
-      grepl("[6-8]", well_ID)        ~ "EtOH",
-      grepl("[2-5]", well_ID)        ~ "N/A",
-      grepl("9|10|11", well_ID)      ~ "Ni",
-      TRUE                           ~ chelator
-    )
+plots <- list() #empty list to fill with each plot
+conditions <- unique(growth_assay$Condition) #conditions which will each have their own plot
+for (i in seq_along(conditions)) {
+  plots[[i]] <- plot_growth_condition(
+    data = growth_assay,
+    condition = conditions[i],
+    title = conditions[i]
   )
-growth_assay_ctrl$chelator_conc <- "N/A"
-
-
-growth_assay_long <- full_join(growth_assay_chel, growth_assay_ctrl)
-
-growth_assay_long$chelator_conc <- factor(growth_assay_long$chelator_conc, levels = c("N/A", "5", "10", "20"))
-growth_assay_long$chelator <- factor(growth_assay_long$chelator_conc, levels = c("DFOB", "BCS", "DMG+Ni", "TPEN", "Ni", "EtOH", "N/A"))
-
-growth_assay_long %>% dplyr::filter(growth_assay_long$chelator == "TPEN" | growth_assay_long$chelator == "EtOH") %>%
-  ggplot(aes(x=time, y=OD, color=chelator_conc)) + geom_point(aes(fill=chelator_conc)) + facet_wrap(~chelator) + theme(text = element_text(size = 25)) + scale_color_brewer(palette = "RdGy")
-ggsave(file=paste("GC_TPEN.svg"), plot=last_plot())
-
-growth_assay_long %>% dplyr::filter(growth_assay_long$chelator == "Ni" | growth_assay_long$chelator == "DMG+Ni") %>%
-  ggplot(aes(x=time, y=OD, color=chelator_conc)) + geom_point(aes(fill=chelator_conc)) + facet_wrap(~chelator) + theme(text = element_text(size = 25)) + scale_color_brewer(palette = "RdGy")
-ggsave(file=paste("GC_TPEN.svg"), plot=last_plot())
-
-growth_assay_long %>% dplyr::filter(growth_assay_long$chelator == "DFOB" | growth_assay_long$chelator == "BCS" |  growth_assay_long$chelator == "N/A") %>%
-  ggplot(aes(x=time, y=OD, color=chelator_conc)) + geom_point(aes(fill=chelator_conc)) + facet_wrap(~chelator) + theme(text = element_text(size = 25)) + scale_color_brewer(palette = "RdGy")
-
-
-
-#ggsave(file=paste("Chelator_Growth_Curves.svg"), plot=last_plot())
-
-# growth_assay_ctrl %>% 
-#   ggplot(aes(x=time, y=OD, color=chelator)) + geom_point(aes(fill=chelator)) + theme(text = element_text(size = 25)) + facet_wrap(~chelator)
-# ggsave(file=paste("Ctrl_Growth_Curves.svg"), plot=last_plot())
-
+}

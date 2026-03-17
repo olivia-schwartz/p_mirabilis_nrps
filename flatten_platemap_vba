@@ -1,0 +1,47 @@
+Sub Flatten96WellPlatemap()
+
+    Dim srcSheet As Worksheet
+    Dim destSheet As Worksheet
+    Dim r As Integer, c As Integer
+    Dim outputRow As Long
+    Dim wellID As String
+
+    Set srcSheet = ThisWorkbook.Sheets(1)
+
+    ' Create or clear Sheet2
+    On Error Resume Next
+    Set destSheet = ThisWorkbook.Sheets("Sheet2")
+    On Error GoTo 0
+
+    If destSheet Is Nothing Then
+        Set destSheet = ThisWorkbook.Sheets.Add
+        destSheet.Name = "Sheet2"
+    Else
+        destSheet.Cells.Clear
+    End If
+
+    ' Headers (optional)
+    destSheet.Cells(1, 1).Value = "Well ID"
+    destSheet.Cells(1, 2).Value = "Contents"
+
+    outputRow = 2
+
+    ' Loop through 96-well plate (A–H, 1–12)
+    For r = 1 To 8
+        For c = 1 To 12
+
+            ' Convert row number to letter (A–H)
+            wellID = Chr(64 + r) & c
+
+            destSheet.Cells(outputRow, 1).Value = wellID
+            destSheet.Cells(outputRow, 2).Value = srcSheet.Cells(r, c).Value
+
+            outputRow = outputRow + 1
+
+        Next c
+    Next r
+
+    MsgBox "96-well platemap flattened to Sheet2.", vbInformation
+
+End Sub
+
